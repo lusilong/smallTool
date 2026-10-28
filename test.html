@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UTM 工具自测</title>
+<style>
+body{font-family:ui-monospace,Consolas,monospace;margin:0;padding:20px;background:#f7f9fc;color:#172033}
+h1{font-family:system-ui,sans-serif;font-size:18px}
+pre{background:white;border:1px solid #dfe5ec;border-radius:10px;padding:16px;line-height:1.7;overflow:auto}
+iframe{width:1px;height:1px;border:0;position:absolute;left:-9999px}
+</style>
+</head>
+<body>
+<h1>UTM 工具自测（基准值来自 pyproj）</h1>
+<pre id="out">正在加载 index.html…</pre>
+<iframe id="frame" src="./index.html" title="被测试页面"></iframe>
+<script>
+// 直接用 iframe 加载真实的 index.html，操作的是线上同一份 DOM 与脚本
+const frame = document.getElementById("frame");
+const out = document.getElementById("out");
+
+const cases = [
+  [34.7003918578744, 113.51083373962459, "49N", "EPSG:32649", 729975.835, 3842688.220],
+  [39.9042, 116.4074, "50N", "EPSG:32650", 449345.061, 4417292.494],
+  [-33.8688, 151.2093, "56S", "EPSG:32756", 334368.634, 6250948.345],
+  [0, 0, "31N", "EPSG:32631", 166021.443, 0.000],
+  [60, 5, "32N", "EPSG:32632", 276979.926, 6658157.202],
+  [78, 15, "33N", "EPSG:32633", 500000.000, 8658369.586],
+  [-79.9, -179.9, "1S", "EPSG:32701", 443247.872, 1128161.373],
+  [84, 179.9, "60N", "EPSG:32660", 533829.158, 9328945.450],
+  [45, -123, "10N", "EPSG:32610", 500000.000, 4982950.400],
+];
+
+frame.addEventListener("load", () => {
+  const d = frame.contentDocument;
+  const g = id => d.getElementById(id);
+  const lines = [];
+  let fail = 0;
+
+  for (const [lat, lon, zone, epsg, east, north] of cases) {
+    g("error").style.display = "none";
+    g("lat").value = String(lat);
+    g("lon").value = String(lon);
+    g("convert").click();
+
+    const gotZone = g("zone").textContent;
+    const gotEpsg = g("epsg").textContent;
+    const dE = Math.abs(parseFloat(g("east").textContent) - east);
+    const dN = Math.abs(parseFloat(g("north").textContent) - north);
+    const ok = gotZone === zone && gotEpsg === epsg && dE <= 0.002 && dN <= 0.002;
+    if (!ok) fail++;
+    lines.push(`${ok ? "PASS" : "FAIL"}  ${lat}, ${lon} → ${gotZone} ${gotEpsg} E=${g("east").textContent} N=${g("north").textContent}`);
+  }
+
+  g("lat").value = "90"; g("lon").value = "0"; g("convert").click();
+  const okErr = g("error").style.display === "block";
+  if (!okErr) fail++;
+  lines.push(`${okErr ? "PASS" : "FAIL"}  纬度 90° 被拒绝并给出提示`);
+
+  g("lat").value = ""; g("lon").value = "113"; g("convert").click();
+  const okEmpty = g("error").style.display === "block";
+  if (!okEmpty) fail++;
+  lines.push(`${okEmpty ? "PASS" : "FAIL"}  空输入被拒绝`);
+
+  lines.push("");
+  lines.push(fail === 0 ? "全部通过" : `${fail} 项失败`);
+  out.textContent = lines.join("\n");
+  document.title = (fail === 0 ? "✅ " : "❌ ") + "UTM 自测";
+});
+</script>
+</body>
+</html>

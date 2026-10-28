@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>经纬度转 UTM 坐标工具</title>
+<meta name="description" content="在线经纬度转 UTM 坐标工具，纯浏览器本地计算，输出 Easting、Northing、UTM Zone 与 EPSG 代码。">
+<style>
+:root{--navy:#15263e;--blue:#1769e8;--green:#16864b;--border:#dfe5ec;--muted:#667085}
+*{box-sizing:border-box}
+body{margin:0;background:#f5f7fb;color:#172033;font-family:system-ui,-apple-system,"Microsoft YaHei",Arial,sans-serif}
+header{background:linear-gradient(120deg,#14243b,#203954);color:white;padding:24px max(22px,calc((100% - 1100px)/2))}
+header h1{font-size:clamp(22px,3vw,30px);margin:0 0 7px}
+header p{margin:0;color:#d7e3f2}
+main{max-width:1100px;margin:24px auto;padding:0 18px 36px}
+.panel{background:white;border:1px solid var(--border);border-radius:12px;padding:22px;margin-bottom:18px;box-shadow:0 3px 12px #15263e08}
+h2{font-size:18px;margin:0 0 18px}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+label{display:block;font-weight:600;font-size:14px;margin-bottom:8px}
+input,select{width:100%;padding:13px 14px;border:1px solid #cfd7e3;border-radius:8px;font-size:16px;background:white;color:#172033}
+input:focus,select:focus{outline:2px solid #b8d4ff;border-color:var(--blue)}
+.hint{font-size:12px;color:var(--muted);margin-top:6px}
+.actions{display:flex;gap:10px;justify-content:center;margin-top:22px;flex-wrap:wrap}
+button{border:0;border-radius:8px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer}
+.primary{background:var(--blue);color:white;min-width:220px}
+.secondary{background:#f1f4f8;color:#27364b;border:1px solid var(--border)}
+.results{background:#f2fbf5;border-color:#d7f0df}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.result{border:1px solid #d6e8dc;border-radius:9px;padding:16px;background:#ffffffa8;min-width:0}
+.result .k{font-size:13px;color:#344054;font-weight:650;margin-bottom:10px}
+.result .v{font-size:clamp(22px,3.2vw,34px);font-weight:750;color:var(--green);overflow-wrap:anywhere}
+.unit{font-size:14px;color:#475467;font-weight:500}
+.tag{display:inline-block;border:1px solid #9bd6b2;color:var(--green);border-radius:6px;padding:7px 10px;font-weight:700}
+.note{background:#eef6ff;border:1px solid #cfe2ff;border-radius:8px;padding:13px 15px;margin-top:14px;color:#344b68;font-size:14px;line-height:1.65}
+.error{display:none;margin-top:12px;color:#b42318;background:#fff1f0;padding:10px 12px;border-radius:7px}
+.lower{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+p,li{line-height:1.75}
+code{background:#f0f3f7;padding:2px 5px;border-radius:4px}
+footer{color:#667085;font-size:13px;text-align:center;margin-top:20px}
+@media(max-width:650px){.fields,.grid,.lower{grid-template-columns:1fr}.panel{padding:17px}header{padding:22px 18px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>◎ 经纬度转 UTM 坐标工具</h1>
+  <p>输入地理坐标，计算 UTM 东坐标、北坐标、分区 Zone 与 EPSG 代码</p>
+</header>
+<main>
+  <section class="panel">
+    <h2>输入经纬度（WGS84）</h2>
+    <div class="fields">
+      <div><label for="lat">纬度 Latitude（°）</label><input id="lat" type="number" step="any" value="34.7003918578744"><div class="hint">范围：−80° 至 84°（标准 UTM 覆盖范围）</div></div>
+      <div><label for="lon">经度 Longitude（°）</label><input id="lon" type="number" step="any" value="113.51083373962459"><div class="hint">范围：−180° 至 180°</div></div>
+    </div>
+    <div class="actions"><button class="primary" id="convert">转换为 UTM 坐标</button><button class="secondary" id="reset">重置示例</button></div>
+    <div id="error" class="error" role="alert"></div>
+  </section>
+
+  <section class="panel results" aria-live="polite">
+    <h2>转换结果</h2>
+    <div class="grid">
+      <div class="result"><div class="k">UTM 分区（Zone）</div><div class="v" id="zone">49N</div></div>
+      <div class="result"><div class="k">EPSG 代码</div><div><span class="tag" id="epsg">EPSG:32649</span> <span class="unit" id="crs">WGS 84 / UTM zone 49N</span></div></div>
+      <div class="result"><div class="k">东坐标（Easting / X）</div><div class="v"><span id="east">729975.835</span> <span class="unit">m</span></div></div>
+      <div class="result"><div class="k">北坐标（Northing / Y）</div><div class="v"><span id="north">3842688.220</span> <span class="unit">m</span></div></div>
+    </div>
+    <div class="note"><strong>说明：</strong>结果基于 WGS84 椭球，单位为米。Easting 是东坐标 X，Northing 是北坐标 Y。若输入来自高德或百度地图，请先确认其坐标基准并转换到 WGS84。</div>
+    <div class="actions"><button class="secondary" id="copy">复制结果</button></div>
+    <div id="copied" class="hint" style="text-align:center" aria-live="polite"></div>
+  </section>
+
+  <div class="lower">
+    <section class="panel">
+      <h2>计算原理</h2>
+      <p>UTM（通用横轴墨卡托投影）把地球划分为 60 个分区，每个分区经度宽 6°。常规分区号为：</p>
+      <p><code>Zone = floor((经度 + 180) / 6) + 1</code></p>
+      <p>中央经线为 <code>Zone × 6 − 183°</code>。投影采用 WGS84 椭球参数、比例因子 0.9996、东向假偏移 500,000 m；南半球另加 10,000,000 m 北向假偏移。</p>
+    </section>
+    <section class="panel">
+      <h2>使用提示</h2>
+      <ul>
+        <li>输入十进制度数，纬度为正表示北纬，经度为正表示东经。</li>
+        <li>标准 UTM 适用纬度约为 80°S 至 84°N。</li>
+        <li>EPSG 北半球为 <code>326xx</code>，南半球为 <code>327xx</code>，其中 <code>xx</code> 是 Zone 编号。</li>
+        <li>这是纯前端网页，计算在浏览器本地完成，不会上传坐标。</li>
+      </ul>
+    </section>
+  </div>
+  <footer>WGS84 · UTM · 本地计算，无需联网</footer>
+</main>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const sample = {lat: "34.7003918578744", lon: "113.51083373962459"};
+  // WGS84 ellipsoid and UTM parameters
+  function toUTM(latDeg, lonDeg) {
+    if (!Number.isFinite(latDeg) || !Number.isFinite(lonDeg)) throw new Error("请输入有效的经纬度数字。");
+    if (latDeg < -80 || latDeg > 84) throw new Error("标准 UTM 纬度范围为 -80° 至 84°。");
+    if (lonDeg < -180 || lonDeg > 180) throw new Error("经度范围为 -180° 至 180°。");
+    const a = 6378137.0;
+    const f = 1 / 298.257223563;
+    const k0 = 0.9996;
+    const e2 = f * (2 - f);
+    const ep2 = e2 / (1 - e2);
+    const lat = latDeg * Math.PI / 180;
+    const lon = lonDeg * Math.PI / 180;
+
+    // Standard UTM zone, including Norway and Svalbard exceptions.
+    let zone = Math.floor((lonDeg + 180) / 6) + 1;
+    if (lonDeg === 180) zone = 60;
+    if (latDeg >= 56 && latDeg < 64 && lonDeg >= 3 && lonDeg < 12) zone = 32;
+    if (latDeg >= 72 && latDeg < 84) {
+      if (lonDeg >= 0 && lonDeg < 9) zone = 31;
+      else if (lonDeg >= 9 && lonDeg < 21) zone = 33;
+      else if (lonDeg >= 21 && lonDeg < 33) zone = 35;
+      else if (lonDeg >= 33 && lonDeg < 42) zone = 37;
+    }
+    const lon0 = ((zone - 1) * 6 - 180 + 3) * Math.PI / 180;
+    const sinLat = Math.sin(lat), cosLat = Math.cos(lat), tanLat = Math.tan(lat);
+    const N = a / Math.sqrt(1 - e2 * sinLat * sinLat);
+    const T = tanLat * tanLat;
+    const C = ep2 * cosLat * cosLat;
+    const A = cosLat * (lon - lon0);
+    const e4 = e2 * e2, e6 = e4 * e2;
+    const M = a * ((1 - e2/4 - 3*e4/64 - 5*e6/256)*lat
+      - (3*e2/8 + 3*e4/32 + 45*e6/1024)*Math.sin(2*lat)
+      + (15*e4/256 + 45*e6/1024)*Math.sin(4*lat)
+      - (35*e6/3072)*Math.sin(6*lat));
+    const east = 500000 + k0*N*(A + (1-T+C)*Math.pow(A,3)/6
+      + (5-18*T+T*T+72*C-58*ep2)*Math.pow(A,5)/120);
+    let north = k0*(M + N*tanLat*(A*A/2
+      + (5-T+9*C+4*C*C)*Math.pow(A,4)/24
+      + (61-58*T+T*T+600*C-330*ep2)*Math.pow(A,6)/720));
+    const northHemisphere = latDeg >= 0;
+    if (!northHemisphere) north += 10000000;
+    return {zone, hemisphere: northHemisphere ? "N" : "S", east, north};
+  }
+  function convert() {
+    $("error").style.display = "none";
+    $("copied").textContent = "";
+    try {
+      const lat = Number($("lat").value), lon = Number($("lon").value);
+      if ($("lat").value.trim() === "" || $("lon").value.trim() === "") throw new Error("请填写纬度和经度。");
+      const r = toUTM(lat, lon);
+      const zoneText = `${r.zone}${r.hemisphere}`;
+      const epsg = (r.hemisphere === "N" ? 32600 : 32700) + r.zone;
+      $("zone").textContent = zoneText;
+      $("epsg").textContent = `EPSG:${epsg}`;
+      $("crs").textContent = `WGS 84 / UTM zone ${zoneText}`;
+      $("east").textContent = r.east.toFixed(3);
+      $("north").textContent = r.north.toFixed(3);
+    } catch (e) {
+      $("error").textContent = e.message;
+      $("error").style.display = "block";
+    }
+  }
+  $("convert").addEventListener("click", convert);
+  $("reset").addEventListener("click", () => { $("lat").value = sample.lat; $("lon").value = sample.lon; convert(); });
+  $("copy").addEventListener("click", async () => {
+    const s = `Latitude: ${$("lat").value}\nLongitude: ${$("lon").value}\nZone: ${$("zone").textContent}\n${$("epsg").textContent}\nEasting (X): ${$("east").textContent} m\nNorthing (Y): ${$("north").textContent} m`;
+    try { await navigator.clipboard.writeText(s); $("copied").textContent = "已复制坐标结果。"; }
+    catch (_) { $("copied").textContent = "浏览器不允许自动复制，请手动复制结果。"; }
+  });
+  convert();
+})();
+</script>
+</body>
+</html>
